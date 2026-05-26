@@ -1,0 +1,11 @@
+A few apps claim to have gotten good returns by investing like Pelosi or other congress members. Are you able to pull data on congressional
+Members trades each weekMay 19Claude responded: Good question — yes, this data is publicly available and there are real ways to pull it.Searched the webSearched the webGood question — yes, this data is publicly available and there are real ways to pull it. Here's the honest breakdown:
+The Data Is Real and Legally Public
+Since 2012, the STOCK Act requires members of Congress to publicly disclose financial transactions over $1,000 within 45 days of the transaction. These are filed as Periodic Transaction Reports (PTRs). So the underlying data is legitimate — apps like the Pelosi tracker aren't doing anything shady, they're just surfacing public filings. AInvest API
+The Alpha Question
+The honest answer: the edge is overstated by those apps. The 45-day reporting lag means by the time you see a trade, the move has often already happened. Where there is signal is in sector clustering — if multiple members on the same committee are buying the same sector, that can be a leading indicator for favorable legislation.
+Best Sources to Pull This Data
+SourceBest ForCostCapitol Trades (capitaltrades.com)Best UI, browse by member/ticker/partyFree browse, no APIQuiverQuantClean API, historical data~$10/moUnusual WhalesCongressional tracker + options flow combinedPaidFMP APISeparate Senate and House endpoints, structured JSON Financial Modeling PrepFreemiumRaw gov sourceHouse publishes a daily-updated ZIP at disclosures-clerk.house.gov; Senate at efdsearch.senate.gov — both free, no login needed DEV CommunityFree
+For Your Python Morning Brief
+Since you're already building a GitHub Actions script, the cleanest integration would be QuiverQuant ($10/mo) or FMP — both have documented REST APIs you can call to pull last week's congressional trades filtered by ticker. You could surface it as a daily alert: "Any Congress member traded your holdings in the last 7 days."
+Want me to build that into your morning brief script — a congressional trade scanner filtered against your current 22 positions?
