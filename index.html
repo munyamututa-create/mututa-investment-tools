@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mututa Capital — Sunday PM Review</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; color: #e5e7eb; font-family: 'DM Sans', 'Helvetica Neue', sans-serif; }
+input, textarea, select { width: 100%; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; color: #e5e7eb; padding: 9px 12px; font-size: 13px; font-family: 'DM Mono', monospace; outline: none; box-sizing: border-box; resize: vertical; }
+input::placeholder, textarea::placeholder { color: #374151; }
+input:focus, textarea:focus, select:focus { border-color: rgba(99,102,241,0.4); box-shadow: 0 0 0 2px rgba(99,102,241,0.08); }
+select { cursor: pointer; appearance: none; }
+select option { background: #111827; }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 2px; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState } = React;
+
+const THEMES = ["AI Infrastructure","Defense / Autonomous","US Slowdown / Counter-Cyclical","Off-Theme"];
+const THESIS_STATUS = ["Intact","Review","Broken","Paused"];
+const CONVICTION = ["High","Medium","Low"];
+const DATE = new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+
+const sec = { background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"2px", padding:"24px 28px", marginBottom:"20px" };
+const lbl = { display:"block", fontSize:"10px", letterSpacing:"0.12em", textTransform:"uppercase", color:"#6b7280", marginBottom:"6px", fontFamily:"'DM Mono',monospace" };
+
+const badge = (c) => ({
+  display:"inline-block", padding:"2px 8px", borderRadius:"2px", fontSize:"10px",
+  letterSpacing:"0.08em", fontFamily:"'DM Mono',monospace",
+  background: c==="green"?"rgba(34,197,94,0.12)":c==="yellow"?"rgba(234,179,8,0.12)":c==="red"?"rgba(239,68,68,0.12)":"rgba(99,102,241,0.12)",
+  color: c==="green"?"#4ade80":c==="yellow"?"#facc15":c==="red"?"#f87171":"#a5b4fc",
+  border: "1px solid "+(c==="green"?"rgba(34,197,94,0.2)":c==="yellow"?"rgba(234,179,8,0.2)":c==="red"?"rgba(239,68,68,0.2)":"rgba(99,102,241,0.2)")
+});
+
+function Row({label,children,half}) {
+  return (
+    <div style={{flex:half?"0 0 calc(50% - 8px)":"1 1 100%",marginBottom:"16px"}}>
+      <label style={lbl}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Divider({label}) {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:"12px",margin:"28px 0 20px"}}>
+      <div style={{flex:1,height:"1px",background:"rgba(255,255,255,0.07)"}}/>
+      <span style={{fontSize:"10px",letterSpacing:"0.15em",color:"#4b5563",fontFamily:"'DM Mono',monospace",textTransform:"uppercase"}}>{label}</span>
+      <div style={{flex:1,height:"1px",background:"rgba(255,255,255,0.07)"}}/>
+    </div>
+  );
+}
+
+function ThesisRow({ticker, onRemove}) {
+  const [d,setD] = useState({theme:THEMES[0],status:"Intact",conviction:"High",thesis:"",catalyst:"",exit_condition:"",exit_price:"",position_size:"",cost_basis:"",action:"Hold"});
+  const s = (k,v) => setD(x=>({...x,[k]:v}));
+  const sc = d.status==="Intact"?"green":d.status==="Review"?"yellow":d.status==="Broken"?"red":"purple";
+  const bc = sc==="green"?"#4ade80":sc==="yellow"?"#facc15":sc==="red"?"#f87171":"#818cf8";
+  const emoji = d.status==="Intact"?"✅ ":d.status==="Review"?"⚠️ ":d.status==="Broken"?"❌ ":"⏸ ";
+  return (
+    <div style={{...sec, borderLeft:"3px solid "+bc}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"18px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"12px",flexWrap:"wrap"}}>
+          <span style={{fontSize:"18px",fontWeight:"700",color:"#f9fafb",fontFamily:"'DM Mono',monospace"}}>{ticker}</span>
+          <span style={badge(sc)}>{emoji}{d.status}</span>
+          <span style={badge("purple")}>{d.theme}</span>
+        </div>
+        <button onClick={onRemove} style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:"20px",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"16px"}}>
+        <Row label="Theme" half>
+          <select value={d.theme} onChange={e=>s("theme",e.target.value)}>
+            {THEMES.map(t=><option key={t}>{t}</option>)}
+          </select>
+        </Row>
+        <Row label="Thesis Status" half>
+          <select value={d.status} onChange={e=>s("status",e.target.value)}>
+            {THESIS_STATUS.map(t=><option key={t}>{t}</option>)}
+          </select>
+        </Row>
+        <Row label="Conviction" half>
+          <select value={d.conviction} onChange={e=>s("conviction",e.target.value)}>
+            {CONVICTION.map(c=><option key={c}>{c}</option>)}
+          </select>
+        </Row>
+        <Row label="Weekly Action" half>
+          <select value={d.action} onChange={e=>s("action",e.target.value)}>
+            {["Hold","Add","Trim","Exit","Watch"].map(a=><option key={a}>{a}</option>)}
+          </select>
+        </Row>
+        <Row label="Position Size ($)">
+          <input placeholder="e.g. 40000" value={d.position_size} onChange={e=>s("position_size",e.target.value)}/>
+        </Row>
+        <Row label="Cost Basis" half>
+          <input placeholder="e.g. $56.40 avg" value={d.cost_basis} onChange={e=>s("cost_basis",e.target.value)}/>
+        </Row>
+        <Row label="Exit Price / Stop Level" half>
+          <input placeholder="e.g. $48 (15% below entry)" value={d.exit_price} onChange={e=>s("exit_price",e.target.value)}/>
+        </Row>
+        <Row label="Thesis — why I own this">
+          <textarea rows={2} placeholder="e.g. CIEN benefits from AI-driven fiber buildout as hyperscalers expand long-haul capacity..." value={d.thesis} onChange={e=>s("thesis",e.target.value)}/>
+        </Row>
+        <Row label="Next Catalyst">
+          <input placeholder="e.g. Earnings Aug 13 / FCC ruling Q3..." value={d.catalyst} onChange={e=>s("catalyst",e.target.value)}/>
+        </Row>
+        <Row label="Exit Condition — I am wrong if...">
+          <textarea rows={2} placeholder="e.g. If hyperscaler capex cuts more than 10% or CIEN loses a major customer, thesis is broken." value={d.exit_condition} onChange={e=>s("exit_condition",e.target.value)}/>
+        </Row>
+      </div>
+    </div>
+  );
+}
+
+function WatchlistRow({ticker, onRemove}) {
+  const [d,setD] = useState({theme:THEMES[0],entry_trigger:"",conviction:"Medium",notes:""});
+  const s = (k,v) => setD(x=>({...x,[k]:v}));
+  return (
+    <div style={{...sec, borderLeft:"3px solid rgba(99,102,241,0.5)"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+        <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+          <span style={{fontSize:"16px",fontWeight:"600",color:"#d1d5db",fontFamily:"'DM Mono',monospace"}}>{ticker}</span>
+          <span style={badge("purple")}>WATCHLIST</span>
+        </div>
+        <button onClick={onRemove} style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:"20px",lineHeight:1}}>×</button>
+      </div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:"16px"}}>
+        <Row label="Theme" half>
+          <select value={d.theme} onChange={e=>s("theme",e.target.value)}>
+            {THEMES.map(t=><option key={t}>{t}</option>)}
+          </select>
+        </Row>
+        <Row label="Conviction" half>
+          <select value={d.conviction} onChange={e=>s("conviction",e.target.value)}>
+            {CONVICTION.map(c=><option key={c}>{c}</option>)}
+          </select>
+        </Row>
+        <Row label="Entry Trigger — I buy when...">
+          <input placeholder="e.g. CRDO pulls back to $140 or confirms above $160 resistance..." value={d.entry_trigger} onChange={e=>s("entry_trigger",e.target.value)}/>
+        </Row>
+        <Row label="Notes">
+          <textarea rows={2} placeholder="Key risks, catalysts, alternatives..." value={d.notes} onChange={e=>s("notes",e.target.value)}/>
+        </Row>
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [tab,setTab] = useState("holdings");
+  const [holdings,setHoldings] = useState(["SNDK","SOXX","GOOG","DIA","CIEN","EZPW","CSTM","TTMI","VIAV","UNFI","MU","VRT","KTOS","WMT","AGX","AAPL"]);
+  const [exits,setExits] = useState(["CHAT","KSKGF","CLYM","MMSMY","SSRM"]);
+  const [watchlist,setWatchlist] = useState(["ALAB","CRDO","AVAV","BABA","EWJ","RNMBY","RSG"]);
+  const [macro,setMacro] = useState({rates:"",sentiment:"",theme_check:"",margin_note:"",weekly_log:""});
+  const [newTicker,setNewTicker] = useState("");
+  const setM = (k,v) => setMacro(m=>({...m,[k]:v}));
+  const add = (list,setList) => { const t=newTicker.trim().toUpperCase(); if(t&&!list.includes(t)){setList(l=>[...l,t]);setNewTicker("");} };
+
+  const tabs = [
+    {id:"macro",label:"01  Macro"},
+    {id:"holdings",label:"02  Holdings"},
+    {id:"exits",label:"03  Exit List"},
+    {id:"watchlist",label:"04  Watchlist"},
+    {id:"decisions",label:"05  Decisions"}
+  ];
+
+  const btnAdd = (onClick, color) => ({
+    background:"rgba("+color+",0.1)", border:"1px solid rgba("+color+",0.25)", color:"#"+( color==="99,102,241"?"a5b4fc":"f87171"),
+    borderRadius:"2px", padding:"8px 16px", cursor:"pointer", fontSize:"11px", fontFamily:"'DM Mono',monospace", letterSpacing:"0.08em"
+  });
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0a0f",backgroundImage:"radial-gradient(ellipse at 20% 0%,rgba(30,27,75,0.4) 0%,transparent 60%),radial-gradient(ellipse at 80% 100%,rgba(15,23,42,0.6) 0%,transparent 60%)"}}>
+
+      {/* HEADER */}
+      <div style={{padding:"36px 40px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"28px",flexWrap:"wrap",gap:"16px"}}>
+          <div>
+            <div style={{fontSize:"10px",letterSpacing:"0.2em",color:"#4b5563",fontFamily:"'DM Mono',monospace",textTransform:"uppercase",marginBottom:"6px"}}>Mututa Capital — Weekly Review</div>
+            <h1 style={{fontSize:"28px",fontWeight:"700",fontFamily:"'Playfair Display',serif",color:"#f9fafb",letterSpacing:"-0.01em"}}>Sunday PM Review</h1>
+            <div style={{fontSize:"12px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginTop:"4px"}}>{DATE}</div>
+          </div>
+          <div style={{textAlign:"right"}}>
+            <div style={{fontSize:"10px",color:"#4b5563",fontFamily:"'DM Mono',monospace",letterSpacing:"0.1em",marginBottom:"4px"}}>MARGIN DEBIT TARGET</div>
+            <div style={{fontSize:"22px",fontWeight:"600",color:"#f87171",fontFamily:"'DM Mono',monospace"}}>$139K to $80K</div>
+            <div style={{fontSize:"10px",color:"#6b7280",fontFamily:"'DM Mono',monospace"}}>by Dec 2026</div>
+          </div>
+        </div>
+        <div style={{display:"flex",overflowX:"auto"}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"10px 20px",fontSize:"11px",letterSpacing:"0.1em",textTransform:"uppercase",fontFamily:"'DM Mono',monospace",color:tab===t.id?"#f9fafb":"#4b5563",borderBottom:tab===t.id?"2px solid #818cf8":"2px solid transparent",whiteSpace:"nowrap",transition:"all 0.15s"}}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div style={{padding:"32px 40px",maxWidth:"920px"}}>
+
+        {tab==="macro" && (
+          <div>
+            <p style={{fontSize:"11px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginBottom:"24px"}}>Set the macro context before reviewing individual positions. 15 min max.</p>
+            <div style={sec}>
+              <Row label="Rate / Yield environment this week">
+                <input placeholder="e.g. 10Y at 4.6%, Fed still hawkish, no cut expected before Sep..." value={macro.rates} onChange={e=>setM("rates",e.target.value)}/>
+              </Row>
+              <Row label="Overall market sentiment">
+                <input placeholder="e.g. Risk-on / Risk-off / Mixed — key driver this week was..." value={macro.sentiment} onChange={e=>setM("sentiment",e.target.value)}/>
+              </Row>
+              <Row label="Theme health check (AI Infra / Defense / US Slowdown)">
+                <textarea rows={3} placeholder="AI Infra: NVDA earnings confirmed capex cycle intact. Defense: no major news. Slowdown: WMT margins soft..." value={macro.theme_check} onChange={e=>setM("theme_check",e.target.value)}/>
+              </Row>
+              <Row label="Margin note — debit movement this week">
+                <input placeholder="e.g. Debit at $134K, down $5K. On track. Next trim: SNDK partial." value={macro.margin_note} onChange={e=>setM("margin_note",e.target.value)}/>
+              </Row>
+              <Row label="Weekly log entry (for Google Sheets Daily Log)">
+                <textarea rows={4} placeholder="Week of [date]: Key moves — [what happened]. Portfolio impact — [P&L]. Decisions made — [actions]. Open questions — [research for next week]." value={macro.weekly_log} onChange={e=>setM("weekly_log",e.target.value)}/>
+              </Row>
+            </div>
+          </div>
+        )}
+
+        {tab==="holdings" && (
+          <div>
+            <p style={{fontSize:"11px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginBottom:"24px"}}>Core review: thesis still valid? Catalyst on track? Exit condition unchanged?</p>
+            {holdings.map(t=><ThesisRow key={t} ticker={t} onRemove={()=>setHoldings(h=>h.filter(x=>x!==t))}/>)}
+            <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+              <input style={{width:"130px"}} placeholder="Ticker" value={newTicker} onChange={e=>setNewTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&add(holdings,setHoldings)}/>
+              <button onClick={()=>add(holdings,setHoldings)} style={btnAdd(()=>{},"99,102,241")}>+ Add Holding</button>
+            </div>
+          </div>
+        )}
+
+        {tab==="exits" && (
+          <div>
+            <p style={{fontSize:"11px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginBottom:"24px"}}>Marked for exit. Review execution status. Tax timing — short vs long-term?</p>
+            {exits.map(t=>(
+              <div key={t} style={{...sec, borderLeft:"3px solid rgba(239,68,68,0.5)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:"10px"}}>
+                    <span style={{fontSize:"16px",fontWeight:"600",color:"#f87171",fontFamily:"'DM Mono',monospace"}}>{t}</span>
+                    <span style={badge("red")}>EXIT</span>
+                  </div>
+                  <button onClick={()=>setExits(e=>e.filter(x=>x!==t))} style={{background:"none",border:"none",color:"#4b5563",cursor:"pointer",fontSize:"20px",lineHeight:1}}>×</button>
+                </div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:"16px"}}>
+                  <Row label="Exit reason" half><input placeholder="e.g. Off-theme, no thesis fit"/></Row>
+                  <Row label="Status" half>
+                    <select>
+                      {["Pending — not yet sold","Partially trimmed","Sold — tax harvest","Blocked — short-term hold"].map(s=><option key={s}>{s}</option>)}
+                    </select>
+                  </Row>
+                  <Row label="Tax note (CA: 37%+ short-term)"><input placeholder="e.g. Held since Jan 2026 — wait until Jan 2027 for LTCG..."/></Row>
+                  <Row label="Redeployment target"><input placeholder="e.g. Proceeds to margin paydown / KTOS starter position"/></Row>
+                </div>
+              </div>
+            ))}
+            <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+              <input style={{width:"130px"}} placeholder="Ticker" value={newTicker} onChange={e=>setNewTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&add(exits,setExits)}/>
+              <button onClick={()=>add(exits,setExits)} style={btnAdd(()=>{},"239,68,68")}>+ Add to Exit List</button>
+            </div>
+          </div>
+        )}
+
+        {tab==="watchlist" && (
+          <div>
+            <p style={{fontSize:"11px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginBottom:"24px"}}>Next wave. Define the entry trigger before it moves — not after.</p>
+            {watchlist.map(t=><WatchlistRow key={t} ticker={t} onRemove={()=>setWatchlist(w=>w.filter(x=>x!==t))}/>)}
+            <div style={{display:"flex",gap:"8px",marginTop:"8px"}}>
+              <input style={{width:"130px"}} placeholder="Ticker" value={newTicker} onChange={e=>setNewTicker(e.target.value.toUpperCase())} onKeyDown={e=>e.key==="Enter"&&add(watchlist,setWatchlist)}/>
+              <button onClick={()=>add(watchlist,setWatchlist)} style={btnAdd(()=>{},"99,102,241")}>+ Add to Watchlist</button>
+            </div>
+          </div>
+        )}
+
+        {tab==="decisions" && (
+          <div>
+            <p style={{fontSize:"11px",color:"#6b7280",fontFamily:"'DM Mono',monospace",marginBottom:"24px"}}>Commit to next week's actions before Sunday ends. No vague intentions.</p>
+            <div style={sec}>
+              <Divider label="This week's trades"/>
+              <Row label="Sells / Trims — ticker, size, reason, tax note">
+                <textarea rows={4} placeholder="CHAT — sell full ~$34K. Off-theme, SOXX overlap. Short-term, check tax timing. Proceeds to margin.&#10;KSKGF — sell full. OTC, -24%, no thesis. Loss harvest."/>
+              </Row>
+              <Row label="Buys / Adds — ticker, size, entry condition">
+                <textarea rows={4} placeholder="MU — buy ~42 shares if holds above $95. AI storage thesis, post-NVDA confirmed.&#10;WMT — buy ~113 shares if settles $126-128. Trade-down thesis intact."/>
+              </Row>
+              <Divider label="Margin plan"/>
+              <Row label="This week's margin paydown action">
+                <input placeholder="e.g. Apply $8K from CHAT proceeds. New balance: ~$131K."/>
+              </Row>
+              <Row label="Cumulative progress to $80K target">
+                <input placeholder="e.g. $139K to $131K this week. Need $51K more by Dec 2026 (~$7K/mo)."/>
+              </Row>
+              <Divider label="Open questions for next week"/>
+              <Row label="Research tasks before next Sunday">
+                <textarea rows={4} placeholder="1. Pull CRDO Q3 transcript — what drove 11% drop May 22?&#10;2. KTOS earnings date — build position before or after?&#10;3. FinChat: CIEN last 2 calls — any hyperscaler budget pressure?"/>
+              </Row>
+              <Divider label="Monthly rebalance flag"/>
+              <Row label="Is this a monthly rebalance Sunday?">
+                <select>
+                  <option>No — standard weekly review</option>
+                  <option>Yes — run full monthly rebalance</option>
+                </select>
+              </Row>
+              <Row label="Monthly rebalance notes">
+                <textarea rows={3} placeholder="Full portfolio review: theme allocation, margin progress, redeployment plan, position sizing changes..."/>
+              </Row>
+            </div>
+            <div style={{background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:"2px",padding:"20px 24px",marginTop:"4px"}}>
+              <div style={{fontSize:"10px",letterSpacing:"0.15em",color:"#818cf8",fontFamily:"'DM Mono',monospace",textTransform:"uppercase",marginBottom:"12px"}}>The three questions that end every Sunday review</div>
+              <div style={{fontSize:"13px",color:"#9ca3af",fontFamily:"'DM Mono',monospace",lineHeight:"2.2"}}>
+                <div>1. For every holding: <span style={{color:"#e5e7eb"}}>is the original thesis still intact, or am I just hoping?</span></div>
+                <div>2. For every watchlist name: <span style={{color:"#e5e7eb"}}>do I have a written entry trigger, or is this still vague interest?</span></div>
+                <div>3. For margin: <span style={{color:"#e5e7eb"}}>what specific action this week moves me toward $80K?</span></div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
