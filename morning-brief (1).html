@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mututa Capital — Morning Brief</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #111318; color: #f1f5f9; font-family: 'DM Sans','Helvetica Neue',sans-serif; font-size: 16px; line-height: 1.5; }
+input, textarea, select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 4px;
+  color: #f1f5f9;
+  padding: 10px 14px;
+  font-size: 15px;
+  font-family: 'DM Sans',sans-serif;
+  outline: none;
+  box-sizing: border-box;
+  resize: vertical;
+  width: 100%;
+}
+input::placeholder, textarea::placeholder { color: #64748b; }
+input:focus, textarea:focus { border-color: rgba(99,102,241,0.6); }
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+button { font-family: 'DM Sans',sans-serif; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const HOLDINGS = ["SNDK","SOXX","GOOG","DIA","CIEN","EZPW","CSTM","TTMI","VIAV","UNFI","MU","VRT","KTOS","WMT","AGX","AAPL","AXTI","CLS","LITE","PARR"];
+const WATCHLIST = ["ALAB","CRDO","AVAV","BABA","EWJ","RNMBY","RSG"];
+const ALL_TICKERS = [...HOLDINGS, ...WATCHLIST];
+const MACRO_TICKERS = [
+  {sym:"SPY",  label:"S&P 500"},
+  {sym:"QQQ",  label:"Nasdaq 100"},
+  {sym:"DIA",  label:"Dow Jones"},
+  {sym:"TLT",  label:"20Y Treasury"},
+  {sym:"GLD",  label:"Gold"},
+  {sym:"UUP",  label:"US Dollar"},
+  {sym:"VIXY", label:"VIX (VIXY)"},
+];
+
+const DATE = new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+const nowTime = () => new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+
+async function fetchQuotes(tickers) {
+  const syms = tickers.join(",");
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&fields=symbol,regularMarketPrice,regularMarketChangePercent,regularMarketChange,preMarketPrice,preMarketChangePercent,shortName`;
+  try {
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r = await fetch(proxy);
+    const j = await r.json();
+    const parsed = JSON.parse(j.contents);
+    return parsed?.quoteResponse?.result || [];
+  } catch(_) { return []; }
+}
+
+async function fetchEarnings(tickers) {
+  const results = [];
+  for (const sym of tickers.slice(0,10)) {
+    try {
+      const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${sym}?modules=calendarEvents`;
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const r = await fetch(proxy);
+      const j = await r.json();
+      const data = JSON.parse(j.contents);
+      const dates = data?.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate;
+      if (dates && dates.length > 0) {
+        const ts = dates[0]?.raw;
+        if (ts) {
+          const d = new Date(ts * 1000);
+          const diffDays = Math.ceil((d - new Date()) / (1000*60*60*24));
+          if (diffDays >= -1 && diffDays <= 45) {
+            results.push({ sym, date: d.toLocaleDateString("en-US",{month:"short",day:"numeric"}), days: diffDays });
+          }
+        }
+      }
+    } catch(_) {}
+  }
+  return results.sort((a,b)=>a.days-b.days);
+}
+
+function pctInfo(v) {
+  if (v === null || v === undefined || isNaN(v)) return null;
+  const n = parseFloat(v);
+  return { n, str: (n>=0?"+":"")+n.toFixed(2)+"%", color: n>=2?"#4ade80":n>=0?"#86efac":n>-2?"#fca5a5":"#f87171" };
+}
+
+function QuoteCard({ q, isWatchlist }) {
+  if (!q) return null;
+  const hasPre = !!q.preMarketPrice;
+  const reg = pctInfo(q.regularMarketChangePercent);
+  const pre = hasPre ? pctInfo(q.preMarketChangePercent) : null;
+  const displayP = pre || reg;
+  const price = hasPre ? q.preMarketPrice : q.regularMarketPrice;
+  const borderCol = displayP ? (displayP.n >= 2?"#4ade80":displayP.n >= 0?"#34d399":displayP.n > -2?"#fb923c":"#f87171") : "#334155";
+
+  return (
+    <div style={{
+      background:"#1e2330",
+      border:"1px solid #2d3448",
+      borderLeft:`4px solid ${borderCol}`,
+      borderRadius:"6px",
+      padding:"14px 18px",
+      display:"flex",
+      justifyContent:"space-between",
+      alignItems:"center",
+    }}>
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}}>
+          <span style={{fontFamily:"'DM Mono',monospace",fontSize:"17px",fontWeight:"600",color:isWatchlist?"#a5b4fc":"#f1f5f9"}}>{q.symbol}</span>
+          {hasPre && <span style={{fontSize:"11px",fontFamily:"'DM Mono',monospace",color:"#fbbf24",background:"rgba(251,191,36,0.1)",border:"1px solid rgba(251,191,36,0.2)",padding:"1px 6px",borderRadius:"3px"}}>PRE-MKT</span>}
+          {isWatchlist && <span style={{fontSize:"11px",fontFamily:"'DM Mono',monospace",color:"#818cf8",background:"rgba(99,102,241,0.1)",border:"1px solid rgba(99,102,241,0.2)",padding:"1px 6px",borderRadius:"3px"}}>WATCH</span>}
+        </div>
+        <div style={{fontSize:"13px",color:"#94a3b8"}}>{(q.shortName||"").slice(0,30)}</div>
+      </div>
+      <div style={{textAlign:"right"}}>
+        <div style={{fontFamily:"'DM Mono',monospace",fontSize:"20px",fontWeight:"600",color:"#f1f5f9"}}>${price?.toFixed(2)}</div>
+        {displayP && <div style={{fontFamily:"'DM Mono',monospace",fontSize:"14px",color:displayP.color,marginTop:"2px"}}>{displayP.str}{hasPre?" *":""}</div>}
+      </div>
+    </div>
+  );
+}
+
+function MacroRow({ q, label }) {
+  const hasPre = q && !!q.preMarketPrice;
+  const reg = q ? pctInfo(q.regularMarketChangePercent) : null;
+  const pre = hasPre ? pctInfo(q.preMarketChangePercent) : null;
+  const displayP = pre || reg;
+  const price = q ? (hasPre ? q.preMarketPrice : q.regularMarketPrice) : null;
+
+  return (
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #1e2330"}}>
+      <span style={{fontSize:"15px",color:"#cbd5e1"}}>{label}</span>
+      <div style={{display:"flex",gap:"16px",alignItems:"center"}}>
+        <span style={{fontFamily:"'DM Mono',monospace",fontSize:"15px",color:"#f1f5f9",fontWeight:"500"}}>{price ? "$"+price.toFixed(2) : "—"}</span>
+        {displayP && <span style={{fontFamily:"'DM Mono',monospace",fontSize:"14px",color:displayP.color,minWidth:"72px",textAlign:"right"}}>{displayP.str}{hasPre?" *":""}</span>}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [quotes,setQuotes] = useState({});
+  const [macroQ,setMacroQ] = useState({});
+  const [earnings,setEarnings] = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [lastUp,setLastUp] = useState("");
+  const [notes,setNotes] = useState("");
+  const [actions,setActions] = useState("");
+  const [tab,setTab] = useState("movers");
+
+  async function load() {
+    setLoading(true);
+    try {
+      const allQ = await fetchQuotes(ALL_TICKERS);
+      const qm = {}; allQ.forEach(q=>{qm[q.symbol]=q;}); setQuotes(qm);
+      const mQ = await fetchQuotes(MACRO_TICKERS.map(m=>m.sym));
+      const mm = {}; mQ.forEach(q=>{mm[q.symbol]=q;}); setMacroQ(mm);
+      const e = await fetchEarnings(HOLDINGS); setEarnings(e);
+      setLastUp(nowTime());
+    } catch(_) {}
+    setLoading(false);
+  }
+
+  useEffect(()=>{load();},[]);
+
+  const sorted = [...HOLDINGS].map(s=>({sym:s,q:quotes[s]})).filter(x=>x.q)
+    .sort((a,b)=>{
+      const ap = a.q.preMarketChangePercent??a.q.regularMarketChangePercent??0;
+      const bp = b.q.preMarketChangePercent??b.q.regularMarketChangePercent??0;
+      return Math.abs(bp)-Math.abs(ap);
+    });
+
+  const movers = sorted.filter(x=>{
+    const p = x.q.preMarketChangePercent??x.q.regularMarketChangePercent??0;
+    return Math.abs(p)>=1;
+  });
+
+  const wlMovers = WATCHLIST.filter(s=>{
+    const q=quotes[s]; if(!q) return false;
+    const p = q.preMarketChangePercent??q.regularMarketChangePercent??0;
+    return Math.abs(p)>=1;
+  });
+
+  const TABS = [
+    {id:"movers",  label:`Movers${movers.length+wlMovers.length>0?" ("+( movers.length+wlMovers.length)+")":""}`},
+    {id:"all",     label:"All Holdings"},
+    {id:"macro",   label:"Macro"},
+    {id:"earnings",label:"Earnings"},
+    {id:"notes",   label:"Notes"},
+  ];
+
+  const card = {background:"#1a1f2e",border:"1px solid #2d3448",borderRadius:"8px",padding:"20px 24px",marginBottom:"16px"};
+  const secLabel = {fontSize:"12px",letterSpacing:"0.12em",textTransform:"uppercase",color:"#64748b",fontFamily:"'DM Mono',monospace",marginBottom:"14px",display:"block"};
+
+  return (
+    <div style={{minHeight:"100vh",background:"#111318"}}>
+
+      {/* HEADER */}
+      <div style={{background:"#161b27",borderBottom:"1px solid #2d3448",padding:"24px 32px 0"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px",flexWrap:"wrap",gap:"12px"}}>
+          <div>
+            <div style={{fontSize:"12px",letterSpacing:"0.15em",textTransform:"uppercase",color:"#64748b",fontFamily:"'DM Mono',monospace",marginBottom:"6px"}}>Mututa Capital</div>
+            <h1 style={{fontSize:"26px",fontWeight:"700",fontFamily:"'Playfair Display',serif",color:"#f1f5f9"}}>Morning Brief</h1>
+            <div style={{fontSize:"14px",color:"#94a3b8",marginTop:"4px"}}>{DATE}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"10px"}}>
+            <button onClick={load} style={{background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.35)",color:"#a5b4fc",borderRadius:"6px",padding:"9px 18px",cursor:"pointer",fontSize:"14px",fontWeight:"500"}}>
+              {loading?"Loading...":"↻ Refresh"}
+            </button>
+            {lastUp && <div style={{fontSize:"13px",color:"#64748b",fontFamily:"'DM Mono',monospace"}}>Updated {lastUp} · *pre-market</div>}
+            <a href="index.html" style={{fontSize:"13px",color:"#818cf8",textDecoration:"none"}}>→ Sunday Review</a>
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div style={{display:"flex",overflowX:"auto",gap:"4px"}}>
+          {TABS.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{
+              background:"none",border:"none",cursor:"pointer",
+              padding:"10px 20px",fontSize:"14px",fontWeight:"500",
+              color:tab===t.id?"#f1f5f9":"#64748b",
+              borderBottom:tab===t.id?"2px solid #818cf8":"2px solid transparent",
+              whiteSpace:"nowrap",transition:"color 0.15s",
+            }}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div style={{padding:"28px 32px",maxWidth:"900px"}}>
+
+        {/* MOVERS */}
+        {tab==="movers"&&(
+          <div>
+            <span style={secLabel}>Significant moves today (±1% or more)</span>
+            {loading&&<div style={{color:"#64748b",padding:"24px 0",fontSize:"15px"}}>Fetching market data...</div>}
+            {!loading&&movers.length===0&&wlMovers.length===0&&(
+              <div style={{...card,color:"#94a3b8",fontSize:"15px"}}>No moves of ±1%+ right now. Check "All Holdings" for the full picture.</div>
+            )}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"10px",marginBottom:"20px"}}>
+              {movers.map(({sym,q})=><QuoteCard key={sym} q={q} isWatchlist={false}/>)}
+              {wlMovers.map(s=><QuoteCard key={s} q={quotes[s]} isWatchlist={true}/>)}
+            </div>
+          </div>
+        )}
+
+        {/* ALL HOLDINGS */}
+        {tab==="all"&&(
+          <div>
+            <span style={secLabel}>All positions — sorted by move magnitude</span>
+            {loading&&<div style={{color:"#64748b",padding:"24px 0"}}>Fetching market data...</div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"10px",marginBottom:"24px"}}>
+              {sorted.map(({sym,q})=><QuoteCard key={sym} q={q} isWatchlist={false}/>)}
+            </div>
+            <span style={secLabel}>Watchlist</span>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:"10px"}}>
+              {WATCHLIST.filter(s=>quotes[s]).map(s=><QuoteCard key={s} q={quotes[s]} isWatchlist={true}/>)}
+            </div>
+          </div>
+        )}
+
+        {/* MACRO */}
+        {tab==="macro"&&(
+          <div>
+            <span style={secLabel}>Market snapshot — * = pre-market price shown</span>
+            <div style={card}>
+              {MACRO_TICKERS.map(({sym,label})=>(
+                <MacroRow key={sym} q={macroQ[sym]} label={label}/>
+              ))}
+            </div>
+            <div style={{fontSize:"13px",color:"#475569",fontFamily:"'DM Mono',monospace"}}>Data via Yahoo Finance · Refreshed {lastUp||"—"}</div>
+          </div>
+        )}
+
+        {/* EARNINGS */}
+        {tab==="earnings"&&(
+          <div>
+            <span style={secLabel}>Upcoming earnings — your holdings (next 45 days)</span>
+            {loading&&<div style={{color:"#64748b",padding:"24px 0"}}>Fetching earnings dates...</div>}
+            {!loading&&earnings.length===0&&(
+              <div style={{...card,color:"#94a3b8",fontSize:"15px"}}>No earnings found in next 45 days, or data unavailable. Always verify on Earnings Whispers.</div>
+            )}
+            <div style={card}>
+              {earnings.map(e=>{
+                const urg = e.days<=3?"#f87171":e.days<=7?"#fbbf24":"#94a3b8";
+                return (
+                  <div key={e.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 0",borderBottom:"1px solid #1e2330"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"16px"}}>
+                      <span style={{fontFamily:"'DM Mono',monospace",fontSize:"16px",fontWeight:"600",color:"#f1f5f9",minWidth:"70px"}}>{e.sym}</span>
+                      <span style={{fontSize:"15px",color:"#cbd5e1"}}>{e.date}</span>
+                    </div>
+                    <span style={{fontFamily:"'DM Mono',monospace",fontSize:"13px",color:urg,border:`1px solid ${urg}44`,padding:"3px 10px",borderRadius:"4px",background:`${urg}11`}}>
+                      {e.days===0?"TODAY":e.days===1?"TOMORROW":`${e.days} days`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{fontSize:"13px",color:"#475569",fontFamily:"'DM Mono',monospace"}}>Always verify on Earnings Whispers before trading</div>
+          </div>
+        )}
+
+        {/* NOTES */}
+        {tab==="notes"&&(
+          <div>
+            <span style={secLabel}>Today's brief — notes and action items</span>
+            <div style={card}>
+              <div style={{...secLabel,marginBottom:"10px"}}>Key observations this morning</div>
+              <textarea rows={5} placeholder="e.g. SNDK up 4% pre-market on MU analyst upgrade. Futures flat. 10Y yield at 4.58%..." value={notes} onChange={e=>setNotes(e.target.value)} style={{marginBottom:"20px"}}/>
+              <div style={{...secLabel,marginBottom:"10px"}}>Action items before market open</div>
+              <textarea rows={5} placeholder={"1. Check SNDK — consider trim if opens above $1,600. Proceeds to margin.\n2. Watch CIEN at open — no catalyst, hold.\n3. MU — do not chase. Wait for pullback to $90-95."} value={actions} onChange={e=>setActions(e.target.value)}/>
+            </div>
+
+            <div style={{...card,borderLeft:"4px solid rgba(99,102,241,0.5)"}}>
+              <div style={{...secLabel}}>20-minute morning checklist</div>
+              {[
+                "Movers tab — anything ±2% or more needs a reason",
+                "Macro tab — risk-on or risk-off today?",
+                "Earnings tab — any holding reporting this week?",
+                "One action item maximum — write it above",
+                "No clear action? Hold and move on"
+              ].map((item,i)=>(
+                <div key={i} style={{display:"flex",gap:"12px",alignItems:"flex-start",marginBottom:"10px"}}>
+                  <span style={{fontFamily:"'DM Mono',monospace",fontSize:"14px",color:"#64748b",minWidth:"20px"}}>{i+1}.</span>
+                  <span style={{fontSize:"15px",color:"#cbd5e1"}}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
