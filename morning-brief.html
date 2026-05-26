@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mututa Capital — Morning Brief</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #0a0a0f; color: #e5e7eb; font-family: 'DM Sans','Helvetica Neue',sans-serif; }
+input, textarea, select { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 2px; color: #e5e7eb; padding: 8px 12px; font-size: 13px; font-family: 'DM Mono',monospace; outline: none; box-sizing: border-box; resize: vertical; width: 100%; }
+input::placeholder, textarea::placeholder { color: #374151; }
+input:focus, textarea:focus { border-color: rgba(99,102,241,0.4); box-shadow: 0 0 0 2px rgba(99,102,241,0.08); }
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 2px; }
+a { color: #818cf8; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+// ── YOUR PORTFOLIO ─────────────────────────────────────────────
+const HOLDINGS = ["AGX","AAPL","CSTM","TTMI","VIAV","EZPW","UNFI","CIEN","SNDK","SOXX","GOOG","DIA","LITE","PARR","MU","VRT","KTOS","WMT","AXTI","CLS"];
+const WATCHLIST = ["ALAB","CRDO","AVAV","BABA","EWJ","RNMBY","RSG"];
+const ALL_TICKERS = [...HOLDINGS, ...WATCHLIST];
+
+// Macro ETF proxies for snapshot
+const MACRO_TICKERS = [
+  { sym:"SPY",  label:"S&P 500" },
+  { sym:"QQQ",  label:"Nasdaq" },
+  { sym:"DIA",  label:"Dow" },
+  { sym:"TLT",  label:"20Y Bond" },
+  { sym:"GLD",  label:"Gold" },
+  { sym:"UUP",  label:"USD" },
+  { sym:"VIX",  label:"VIX (VIXY)" },
+];
+
+const DATE = new Date().toLocaleDateString("en-US",{weekday:"long",year:"numeric",month:"long",day:"numeric"});
+const TIME = () => new Date().toLocaleTimeString("en-US",{hour:"2-digit",minute:"2-digit"});
+
+// ── STYLES ─────────────────────────────────────────────────────
+const card = { background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:"2px", padding:"20px 24px", marginBottom:"16px" };
+const mono = { fontFamily:"'DM Mono',monospace" };
+const lbl  = { fontSize:"10px", letterSpacing:"0.15em", textTransform:"uppercase", color:"#4b5563", fontFamily:"'DM Mono',monospace" };
+
+function pct(v) {
+  if (v === null || v === undefined || isNaN(v)) return null;
+  const n = parseFloat(v);
+  return { val: n, str: (n>=0?"+":"")+n.toFixed(2)+"%", color: n>=0?"#4ade80":"#f87171" };
+}
+
+// ── YAHOO FINANCE PROXY ────────────────────────────────────────
+// Uses a public CORS proxy to hit Yahoo Finance quote endpoint.
+// Free, no key needed. Rate-limited — batches tickers.
+async function fetchQuotes(tickers) {
+  const syms = tickers.join(",");
+  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${syms}&fields=symbol,regularMarketPrice,regularMarketChangePercent,regularMarketChange,preMarketPrice,preMarketChangePercent,shortName`;
+  // Try direct first (works when market is closed / some browsers)
+  try {
+    const r = await fetch(url, { mode:"cors" });
+    if (r.ok) {
+      const j = await r.json();
+      return j?.quoteResponse?.result || [];
+    }
+  } catch(_) {}
+  // Fallback: allOrigins proxy
+  try {
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+    const r = await fetch(proxy);
+    const j = await r.json();
+    const parsed = JSON.parse(j.contents);
+    return parsed?.quoteResponse?.result || [];
+  } catch(_) {}
+  return [];
+}
+
+// ── EARNINGS CALENDAR ──────────────────────────────────────────
+// Uses Yahoo Finance earnings calendar (no key needed)
+async function fetchEarnings(tickers) {
+  const results = [];
+  // We check each ticker's summary for next earnings date
+  for (const sym of tickers.slice(0,8)) { // limit to avoid rate limit
+    try {
+      const url = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${sym}?modules=calendarEvents`;
+      const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+      const r = await fetch(proxy);
+      const j = await r.json();
+      const data = JSON.parse(j.contents);
+      const dates = data?.quoteSummary?.result?.[0]?.calendarEvents?.earnings?.earningsDate;
+      if (dates && dates.length > 0) {
+        const ts = dates[0]?.raw;
+        if (ts) {
+          const d = new Date(ts * 1000);
+          const today = new Date();
+          const diffDays = Math.ceil((d - today) / (1000*60*60*24));
+          if (diffDays >= -1 && diffDays <= 45) {
+            results.push({ sym, date: d.toLocaleDateString("en-US",{month:"short",day:"numeric"}), days: diffDays });
+          }
+        }
+      }
+    } catch(_) {}
+  }
+  return results.sort((a,b)=>a.days-b.days);
+}
+
+// ── QUOTE CARD ─────────────────────────────────────────────────
+function QuoteCard({ q, isWatchlist }) {
+  if (!q) return null;
+  const reg = pct(q.regularMarketChangePercent);
+  const pre = q.preMarketPrice ? pct(q.preMarketChangePercent) : null;
+  const price = q.preMarketPrice || q.regularMarketPrice;
+  const hasPremarket = !!q.preMarketPrice;
+  const borderColor = reg ? (reg.val >= 2 ? "#4ade80" : reg.val <= -2 ? "#f87171" : reg.val >= 0 ? "#34d399" : "#fb923c") : "#374151";
+
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.02)",
+      border: "1px solid rgba(255,255,255,0.07)",
+      borderLeft: `3px solid ${borderColor}`,
+      borderRadius: "2px",
+      padding: "12px 16px",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: "8px"
+    }}>
+      <div>
+        <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+          <span style={{...mono, fontSize:"14px", fontWeight:"600", color: isWatchlist?"#a5b4fc":"#f9fafb"}}>{q.symbol}</span>
+          {isWatchlist && <span style={{fontSize:"9px",...mono,color:"#4b5563",border:"1px solid #1f2937",padding:"1px 5px",borderRadius:"2px"}}>WATCH</span>}
+          {hasPremarket && <span style={{fontSize:"9px",...mono,color:"#facc15",border:"1px solid rgba(234,179,8,0.2)",padding:"1px 5px",borderRadius:"2px",background:"rgba(234,179,8,0.06)"}}>PRE</span>}
+        </div>
+        <div style={{fontSize:"11px",color:"#6b7280",marginTop:"2px",...mono}}>{(q.shortName||"").slice(0,28)}</div>
+      </div>
+      <div style={{textAlign:"right"}}>
+        <div style={{...mono, fontSize:"15px", fontWeight:"600", color:"#f9fafb"}}>${price?.toFixed(2)}</div>
+        {pre && hasPremarket ? (
+          <div style={{fontSize:"11px",...mono,color:pre.color}}>{pre.str} <span style={{color:"#4b5563"}}>pre</span></div>
+        ) : reg ? (
+          <div style={{fontSize:"11px",...mono,color:reg.color}}>{reg.str}</div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+// ── MACRO ROW ──────────────────────────────────────────────────
+function MacroRow({ q, label }) {
+  if (!q) return (
+    <div style={{display:"flex",justifyContent:"space-between",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+      <span style={{...mono,fontSize:"12px",color:"#4b5563"}}>{label}</span>
+      <span style={{...mono,fontSize:"12px",color:"#374151"}}>—</span>
+    </div>
+  );
+  const reg = pct(q.regularMarketChangePercent);
+  const pre = q.preMarketPrice ? pct(q.preMarketChangePercent) : null;
+  const displayPct = pre || reg;
+  return (
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+      <span style={{...mono,fontSize:"12px",color:"#9ca3af"}}>{label}</span>
+      <div style={{display:"flex",gap:"12px",alignItems:"center"}}>
+        <span style={{...mono,fontSize:"12px",color:"#f9fafb"}}>${(q.preMarketPrice||q.regularMarketPrice)?.toFixed(2)}</span>
+        {displayPct && <span style={{...mono,fontSize:"11px",color:displayPct.color}}>{displayPct.str}{pre?"*":""}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN APP ───────────────────────────────────────────────────
+function App() {
+  const [quotes, setQuotes] = useState({});
+  const [macroQuotes, setMacroQuotes] = useState({});
+  const [earnings, setEarnings] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState("");
+  const [notes, setNotes] = useState("");
+  const [actionItems, setActionItems] = useState("");
+  const [tab, setTab] = useState("movers");
+  const [error, setError] = useState(false);
+
+  async function loadData() {
+    setLoading(true);
+    setError(false);
+    try {
+      // Batch: holdings + watchlist
+      const allQ = await fetchQuotes(ALL_TICKERS);
+      const qMap = {};
+      allQ.forEach(q => { qMap[q.symbol] = q; });
+      setQuotes(qMap);
+
+      // Macro
+      const macroSyms = MACRO_TICKERS.map(m=>m.sym==="VIX"?"VIXY":m.sym);
+      const macroQ = await fetchQuotes(macroSyms);
+      const mMap = {};
+      macroQ.forEach(q => { mMap[q.symbol] = q; });
+      setMacroQuotes(mMap);
+
+      // Earnings (slower — fetch after quotes)
+      const earningsData = await fetchEarnings(HOLDINGS);
+      setEarnings(earningsData);
+
+      setLastUpdated(TIME());
+    } catch(e) {
+      setError(true);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { loadData(); }, []);
+
+  // Sort holdings by premarket move magnitude
+  const sortedHoldings = [...HOLDINGS]
+    .map(s => ({ sym:s, q:quotes[s] }))
+    .filter(x => x.q)
+    .sort((a,b) => {
+      const aP = a.q.preMarketChangePercent ?? a.q.regularMarketChangePercent ?? 0;
+      const bP = b.q.preMarketChangePercent ?? b.q.regularMarketChangePercent ?? 0;
+      return Math.abs(bP) - Math.abs(aP);
+    });
+
+  const movers = sortedHoldings.filter(x => {
+    const p = x.q.preMarketChangePercent ?? x.q.regularMarketChangePercent ?? 0;
+    return Math.abs(p) >= 1;
+  });
+
+  const tabs = [
+    { id:"movers", label:"Movers" },
+    { id:"all", label:"All Holdings" },
+    { id:"macro", label:"Macro" },
+    { id:"earnings", label:"Earnings" },
+    { id:"notes", label:"Notes" },
+  ];
+
+  return (
+    <div style={{minHeight:"100vh",background:"#0a0a0f",backgroundImage:"radial-gradient(ellipse at 20% 0%,rgba(30,27,75,0.4) 0%,transparent 60%)"}}>
+
+      {/* HEADER */}
+      <div style={{padding:"28px 32px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px",flexWrap:"wrap",gap:"12px"}}>
+          <div>
+            <div style={{...lbl,marginBottom:"6px"}}>Mututa Capital</div>
+            <h1 style={{fontSize:"24px",fontWeight:"700",fontFamily:"'Playfair Display',serif",color:"#f9fafb"}}>Morning Brief</h1>
+            <div style={{fontSize:"11px",color:"#6b7280",...mono,marginTop:"3px"}}>{DATE}</div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"8px"}}>
+            <button onClick={loadData} style={{background:"rgba(99,102,241,0.12)",border:"1px solid rgba(99,102,241,0.25)",color:"#a5b4fc",borderRadius:"2px",padding:"7px 14px",cursor:"pointer",fontSize:"11px",...mono,letterSpacing:"0.08em"}}>
+              {loading ? "Loading..." : "↻ Refresh"}
+            </button>
+            {lastUpdated && <div style={{fontSize:"10px",color:"#4b5563",...mono}}>Updated {lastUpdated} · *pre-market</div>}
+            <a href="index.html" style={{fontSize:"10px",...mono,color:"#4b5563"}}>→ Sunday Review</a>
+          </div>
+        </div>
+
+        {/* TABS */}
+        <div style={{display:"flex",overflowX:"auto"}}>
+          {tabs.map(t=>(
+            <button key={t.id} onClick={()=>setTab(t.id)} style={{background:"none",border:"none",cursor:"pointer",padding:"8px 18px",fontSize:"11px",letterSpacing:"0.1em",textTransform:"uppercase",...mono,color:tab===t.id?"#f9fafb":"#4b5563",borderBottom:tab===t.id?"2px solid #818cf8":"2px solid transparent",whiteSpace:"nowrap",transition:"all 0.15s"}}>
+              {t.label}{t.id==="movers"&&movers.length>0?` (${movers.length})`:""}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* CONTENT */}
+      <div style={{padding:"24px 32px",maxWidth:"860px"}}>
+
+        {error && (
+          <div style={{...card,borderLeft:"3px solid #f87171",color:"#f87171",...mono,fontSize:"12px"}}>
+            Could not load market data — Yahoo Finance may be rate-limiting. Try refreshing in 30 seconds. Data is fetched via a public proxy; no API key required.
+          </div>
+        )}
+
+        {/* MOVERS TAB */}
+        {tab==="movers" && (
+          <div>
+            <div style={{...lbl,marginBottom:"16px"}}>Significant moves today (±1% or more)</div>
+            {loading && <div style={{...mono,fontSize:"12px",color:"#4b5563",padding:"20px 0"}}>Fetching market data...</div>}
+            {!loading && movers.length === 0 && (
+              <div style={{...card,...mono,fontSize:"12px",color:"#6b7280"}}>No moves of ±1%+ in your holdings right now. Check "All Holdings" for full picture.</div>
+            )}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px",marginBottom:"20px"}}>
+              {movers.map(({sym,q})=>(
+                <QuoteCard key={sym} q={q} isWatchlist={WATCHLIST.includes(sym)}/>
+              ))}
+            </div>
+
+            {/* Watchlist movers */}
+            {WATCHLIST.filter(s=>quotes[s]).map(s=>{
+              const q = quotes[s];
+              const p = q.preMarketChangePercent ?? q.regularMarketChangePercent ?? 0;
+              if (Math.abs(p) < 1) return null;
+              return <div key={s} style={{marginBottom:"8px"}}><QuoteCard q={q} isWatchlist={true}/></div>;
+            })}
+          </div>
+        )}
+
+        {/* ALL HOLDINGS TAB */}
+        {tab==="all" && (
+          <div>
+            <div style={{...lbl,marginBottom:"16px"}}>All positions — sorted by move magnitude</div>
+            {loading && <div style={{...mono,fontSize:"12px",color:"#4b5563",padding:"20px 0"}}>Fetching market data...</div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px",marginBottom:"24px"}}>
+              {sortedHoldings.map(({sym,q})=>(
+                <QuoteCard key={sym} q={q} isWatchlist={false}/>
+              ))}
+            </div>
+            <div style={{...lbl,marginBottom:"12px"}}>Watchlist</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:"8px"}}>
+              {WATCHLIST.filter(s=>quotes[s]).map(s=>(
+                <QuoteCard key={s} q={quotes[s]} isWatchlist={true}/>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* MACRO TAB */}
+        {tab==="macro" && (
+          <div>
+            <div style={{...lbl,marginBottom:"16px"}}>Market snapshot — * = pre-market</div>
+            <div style={card}>
+              {MACRO_TICKERS.map(({sym,label})=>{
+                const key = sym==="VIX"?"VIXY":sym;
+                return <MacroRow key={sym} q={macroQuotes[key]} label={label}/>;
+              })}
+            </div>
+            <div style={{...mono,fontSize:"10px",color:"#374151",marginTop:"8px"}}>
+              Data via Yahoo Finance · Refreshed {lastUpdated||"—"} · Pre-market shown where available
+            </div>
+          </div>
+        )}
+
+        {/* EARNINGS TAB */}
+        {tab==="earnings" && (
+          <div>
+            <div style={{...lbl,marginBottom:"16px"}}>Upcoming earnings — your holdings (next 45 days)</div>
+            {loading && <div style={{...mono,fontSize:"12px",color:"#4b5563",padding:"20px 0"}}>Fetching earnings dates...</div>}
+            {!loading && earnings.length === 0 && (
+              <div style={{...card,...mono,fontSize:"12px",color:"#6b7280"}}>No earnings found in the next 45 days for scanned tickers, or data unavailable.</div>
+            )}
+            <div style={card}>
+              {earnings.map(e=>{
+                const urgency = e.days <= 3 ? "#f87171" : e.days <= 7 ? "#facc15" : "#9ca3af";
+                return (
+                  <div key={e.sym} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid rgba(255,255,255,0.04)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+                      <span style={{...mono,fontSize:"14px",fontWeight:"600",color:"#f9fafb",width:"60px"}}>{e.sym}</span>
+                      <span style={{...mono,fontSize:"12px",color:"#9ca3af"}}>{e.date}</span>
+                    </div>
+                    <span style={{...mono,fontSize:"11px",color:urgency,border:`1px solid ${urgency}22`,padding:"2px 8px",borderRadius:"2px",background:`${urgency}11`}}>
+                      {e.days === 0 ? "TODAY" : e.days === 1 ? "TOMORROW" : `${e.days}d`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{...mono,fontSize:"10px",color:"#374151",marginTop:"8px"}}>
+              Dates from Yahoo Finance · Always verify on Earnings Whispers before trading
+            </div>
+          </div>
+        )}
+
+        {/* NOTES TAB */}
+        {tab==="notes" && (
+          <div>
+            <div style={{...lbl,marginBottom:"16px"}}>Today's brief — notes and action items</div>
+            <div style={card}>
+              <div style={{...lbl,marginBottom:"8px"}}>Key observations this morning</div>
+              <textarea rows={6} placeholder="e.g. SNDK up 4% pre-market following MU analyst upgrade. No news on CIEN. Macro: futures flat, 10Y yield 4.58%..." value={notes} onChange={e=>setNotes(e.target.value)} style={{marginBottom:"20px"}}/>
+              <div style={{...lbl,marginBottom:"8px"}}>Action items before market open</div>
+              <textarea rows={5} placeholder="1. Check SNDK — consider trim if opens above $1,600. Apply proceeds to margin.&#10;2. Watch CIEN at open — no catalyst, hold.&#10;3. MU — do not chase. Wait for pullback to $90-95 range." value={actionItems} onChange={e=>setActionItems(e.target.value)}/>
+            </div>
+            <div style={{...card, borderLeft:"3px solid rgba(99,102,241,0.4)", marginTop:"4px"}}>
+              <div style={{...lbl,marginBottom:"10px"}}>20-minute morning brief checklist</div>
+              {[
+                "Check movers tab — anything ±2% needs a reason",
+                "Check macro tab — risk-on or risk-off today?",
+                "Check earnings tab — any position reporting this week?",
+                "One action item maximum — write it in notes",
+                "If no clear action: hold and move on"
+              ].map((item,i)=>(
+                <div key={i} style={{display:"flex",gap:"10px",alignItems:"flex-start",marginBottom:"8px"}}>
+                  <span style={{...mono,fontSize:"11px",color:"#4b5563",minWidth:"16px"}}>{i+1}.</span>
+                  <span style={{...mono,fontSize:"12px",color:"#9ca3af"}}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(React.createElement(App));
+</script>
+</body>
+</html>
